@@ -17,9 +17,9 @@
 				<div class="icon-back"></div>
 				<div class="nav-title">返回书架</div>
 			</div>
-			<div id="fiction_chapter_title"></div>
+			<!--<div id="fiction_chapter_title"></div>-->
 			<div id="fiction_container" class="m-read-content">
-				<h4>第一百二十八章 通灵</h4>
+			<!--	<h4>第一百二十八章 通灵</h4>
 				<p>
 					她名雨紫陌，一声青衣，随风翩然飞舞，肌体晶莹，睫毛很长，双眸灵动而深邃，宛若画中人，长的很漂亮，且有一种罕见的灵性。
 
@@ -99,12 +99,12 @@
 					而那银色磨盘也剧烈抖动，而后两块盘石分开，竟然猛地撞在了一起，轰隆一声爆发出一团银色的光团，宛若火山喷涌，冲向高天。
 
 					天摇地动，大湖汹涌，山林隆隆作响！
-				</p>
+				</p>-->
 			</div>
 			<div class="m-button-bar">
 				<ul class="u-tab">
-					<li class="prev_button">上一章</li>
-					<li class="next_button">下一章</li>
+					<li id="prev_button" class="prev_button">上一章</li>
+					<li id="next_button" class="next_button">下一章</li>
 				</ul>
 			</div>
 			<div class="nav-panel-bk font-container" style="display: none;"></div>
@@ -173,7 +173,7 @@
 							success: function (result) {
 								var data = $.base64.decode(result);
 								var json = decodeURIComponent(escape(data));
-								callback(data)
+								callback(json)
                             }
 						})
                     };
@@ -193,6 +193,11 @@
 				};
 				var Win = $(window);
 				var Doc = $(document);
+				var Root = $('#root');
+
+                var readerModel;
+                var readerUI;
+
 				var RootContainer = $('.m-read-content');
 				var initFontSize = parseInt(Util.StorageGetter('font-size')) || 14;
                 RootContainer.css('font-size', initFontSize);
@@ -204,13 +209,17 @@
 				var bgColor4 = '#d0ebd0';
 				var bgColor5 = '#232d45';
 				var initBackground = Util.StorageGetter('background');
-                RootContainer.css('background', initBackground);
+                Root.css('background', initBackground);
 
 
 				function main() {
 					// todo 入口函数
-                    var  readerModel = ReaderModel();
-                    readerModel.init();
+                    readerModel = ReaderModel();
+                    readerUI = ReaderBaseFrame(RootContainer);
+
+                    readerModel.init(function (data) {
+						readerUI(data)
+                    });
                     EventHanlder()
                 }
 
@@ -219,10 +228,13 @@
 				function ReaderModel() {
 					// todo 实现和阅读器相关的数据交互的方法
                     var Chapter_id;
-                    var init = function () {
+                    var ChapterTotal;
+
+                    var init = function (UIcallback) {
                         getFictionInfo(function () {
-                            getCurChapterContent(Chapter_id, function () {
+                            getCurChapterContent(Chapter_id, function (data) {
                                 // todo
+								UIcallback && UIcallback(data);
                             })
                         })
                     };
@@ -230,13 +242,16 @@
 					var getFictionInfo = function (callback) {
 						$.get('data/chapter.json', function (data) {
 						    // 获得章节信息
-                            Chapter_id = data.chapters[1].chapter_id;
-                            console.log(Chapter_id);
+                            Chapter_id = Util.StorageGetter('Chapter_id');
+							if (!Chapter_id == null) {
+                                Chapter_id = data.chapters[1].chapter_id;
+                            }
+                            ChapterTotal = data.chapters.length;
                             callback && callback()
                         }, 'json')
                     };
 
-					var getCurChapterContent = function (chapter_id, data) {
+					var getCurChapterContent = function (chapter_id, callback) {
 						$.get('data/data' + chapter_id +'.json', function (data) {
 							if(data.result == 0){
 							    var url = data.jsonp;
@@ -247,13 +262,48 @@
                         }, 'json')
                     };
 
+					// 上一页
+					var prevChapter = function (UIcallback) {
+						Chapter_id = parseInt(Chapter_id, 10);
+						if (Chapter_id == 0) {
+							return;
+						}
+						Chapter_id -= 1;
+                        Util.StorageSetter('Chapter_id', Chapter_id);
+						getCurChapterContent(Chapter_id, UIcallback)
+                    };
+					// 下一页
+					var nextChapter = function (UIcallback) {
+                        Chapter_id = parseInt(Chapter_id, 10);
+                        if (Chapter_id == ChapterTotal) {
+                            return;
+                        }
+                        Chapter_id += 1;
+                        Util.StorageSetter('Chapter_id', Chapter_id);
+                        getCurChapterContent(Chapter_id, UIcallback)
+                    };
                     return {
-                        init: init
+                        init: init,
+                        prevChapter: prevChapter,
+                        nextChapter: nextChapter
 					}
                 }
 
-                function ReaderBaseFrame() {
+                function ReaderBaseFrame(container) {
 					// todo 渲染基本的UI结构
+					function parseChapterData(jsonData) {
+
+                        var jsonObj = JSON.parse(jsonData);
+                        console.log(jsonObj.p.length)
+                        var html = '<h4>' + jsonObj.t + '</h4>';
+                        for (var i=0; i<jsonObj.p.length; i++) {
+                            html += '<p>' + jsonObj.p[i] + '</p>';
+                        }
+                        return html;
+                    }
+                    return function (data) {
+                        container.html(parseChapterData(data))
+                    }
                 }
 
                 function EventHanlder() {
@@ -301,19 +351,19 @@
 					// 切换背景
 					$('.bk-container').click(function () {
 						if ($(this).attr('data-color') == 1){
-                            RootContainer.css('background', bgColor1);
+                            Root.css('background', bgColor1);
                             Util.StorageSetter('background', bgColor1);
 						} else if ($(this).attr('data-color') == 2){
-                            RootContainer.css('background', bgColor2);
+                            Root.css('background', bgColor2);
                             Util.StorageSetter('background', bgColor2);
 						} else if ($(this).attr('data-color') == 3){
-                            RootContainer.css('background', bgColor3);
+                            Root.css('background', bgColor3);
                             Util.StorageSetter('background', bgColor3);
 						} else if ($(this).attr('data-color') == 4){
-                            RootContainer.css('background', bgColor4);
+                            Root.css('background', bgColor4);
                             Util.StorageSetter('background', bgColor4);
 						} else if ($(this).attr('data-color') == 5){
-                            RootContainer.css('background', bgColor5);
+                            Root.css('background', bgColor5);
                             Util.StorageSetter('background', bgColor5);
 						}
                         $('.bk-container').find('.bk-container-current').hide();
@@ -336,6 +386,24 @@
                         Dom.top_nav.hide();
                         Dom.font_container.hide();
                     })
+					
+					
+					// 上一页
+					$('#prev_button').click(function () {
+						// todo 获得章节的翻页数据，渲染
+                        readerModel.prevChapter(function (data) {
+                            $("body").scrollTop(0);
+                            readerUI(data)
+                        })
+                    });
+
+					// 下一页
+					$('#next_button').click(function () {
+                        readerModel.nextChapter(function (data) {
+                            $("body").scrollTop(0);
+							readerUI(data)
+                        })
+                    });
                 }
 
                 main()
